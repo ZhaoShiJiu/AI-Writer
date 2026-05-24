@@ -1,0 +1,37 @@
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS novels (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(500) NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chapters (
+    id SERIAL PRIMARY KEY,
+    novel_id INTEGER NOT NULL REFERENCES novels(id) ON DELETE CASCADE,
+    title VARCHAR(500) NOT NULL DEFAULT '未命名章节',
+    content TEXT NOT NULL DEFAULT '',
+    summary TEXT,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ai_generations (
+    id SERIAL PRIMARY KEY,
+    chapter_id INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+    user_intent TEXT,
+    prompt_text TEXT NOT NULL,
+    ai_output TEXT NOT NULL,
+    accepted BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 默认用户（V1 简化：单用户）
+INSERT INTO users (id, name) VALUES (1, '写作者') ON CONFLICT (id) DO NOTHING;

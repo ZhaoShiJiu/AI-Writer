@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(docker compose *)",
+      "Bash(docker pull *)",
+      "Read(//c/ProgramData/docker/config/**)",
+      "Bash(docker info *)",
+      "Bash(python -c \"from app.database import Base, engine; from app.models import User, Work, WorldSetting, Character, Outline; print\\('All models imported successfully'\\); print\\('Tables:', [t for t in Base.metadata.tables.keys\\(\\)]\\)\")",
+      "Bash(docker run *)",
+      "Bash(nslookup registry-1.docker.io)",
+      "Bash(pg_isready)",
+      "Bash(sc query *)",
+      "Read(//c/Program Files/**)",
+      "Bash(netstat -ano)",
+      "Bash(winget search *)",
+      "Bash(winget install *)",
+      "Bash(pip uninstall *)"
+    ]
+  }
+}
