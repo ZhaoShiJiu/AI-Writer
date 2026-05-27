@@ -12,7 +12,7 @@ services:
     container_name: novel-write-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "15432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -33,7 +33,7 @@ services:
     container_name: novel-write-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "16379:6379"
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:

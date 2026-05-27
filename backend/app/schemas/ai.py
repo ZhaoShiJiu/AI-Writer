@@ -35,5 +35,17 @@ class GenerationListResponse(BaseModel):
     generations: list[GenerationResponse]
 
 
+class PolishRequest(BaseModel):
+    selected_text: str
+    context_before: str = ""
+    context_after: str = ""
+    requirement: str = ""
+
+
+class PolishResponse(BaseModel):
+    generation_id: int
+    polished_output: str
+
+
 class AcceptRequest(BaseModel):
     accepted: bool = True

@@ -57,6 +57,42 @@ class ContinuationService:
 
         return generation
 
+    async def generate_polish(
+        self,
+        chapter_id: int,
+        selected_text: str,
+        context_before: str = "",
+        context_after: str = "",
+        requirement: str = "",
+    ):
+        chapter = await self.chapter_repo.get_by_id(chapter_id)
+        if not chapter:
+            return None
+
+        system_prompt, user_prompt = self.prompt_builder.build_polish(
+            selected_text=selected_text,
+            context_before=context_before,
+            context_after=context_after,
+            requirement=requirement,
+        )
+
+        ai_output = await self.llm_client.complete(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+
+        generation = AIGeneration(
+            chapter_id=chapter_id,
+            user_intent=requirement,
+            prompt_text=user_prompt,
+            ai_output=ai_output,
+        )
+        self.db.add(generation)
+        await self.db.commit()
+        await self.db.refresh(generation)
+
+        return generation
+
     async def get_generations(self, chapter_id: int) -> list[AIGeneration]:
         result = await self.db.execute(
             select(AIGeneration)

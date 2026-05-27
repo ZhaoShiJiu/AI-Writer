@@ -8,6 +8,8 @@ from app.schemas.ai import (
     ContinueResponse,
     GenerationListResponse,
     GenerationResponse,
+    PolishRequest,
+    PolishResponse,
     RegenerateRequest,
 )
 from app.services.chapter import ChapterService
@@ -55,6 +57,26 @@ async def regenerate_chapter(chapter_id: int, data: RegenerateRequest, db: Async
     return ContinueResponse(
         generation_id=generation.id,
         ai_output=generation.ai_output,
+    )
+
+
+@router.post("/chapters/{chapter_id}/polish", response_model=PolishResponse)
+async def polish_chapter(chapter_id: int, data: PolishRequest, db: AsyncSession = Depends(get_db)):
+    chapter = await ChapterService(db).get_chapter(chapter_id)
+    _require_chapter(chapter)
+
+    service = ContinuationService(db)
+    generation = await service.generate_polish(
+        chapter_id=chapter_id,
+        selected_text=data.selected_text,
+        context_before=data.context_before,
+        context_after=data.context_after,
+        requirement=data.requirement,
+    )
+
+    return PolishResponse(
+        generation_id=generation.id,
+        polished_output=generation.ai_output,
     )
 
 
