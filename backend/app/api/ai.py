@@ -13,7 +13,7 @@ from app.schemas.ai import (
     RegenerateRequest,
 )
 from app.services.chapter import ChapterService
-from app.services.continuation import ContinuationService
+from app.services.writing.engine import WritingEngine
 
 router = APIRouter(tags=["ai"])
 
@@ -28,9 +28,10 @@ async def continue_chapter(chapter_id: int, data: ContinueRequest, db: AsyncSess
     chapter = await ChapterService(db).get_chapter(chapter_id)
     _require_chapter(chapter)
 
-    service = ContinuationService(db)
-    generation = await service.generate_continuation(
+    engine = WritingEngine(db)
+    generation = await engine.generate_continuation(
         chapter_id=chapter_id,
+        novel_id=chapter.novel_id,
         user_intent=data.user_intent,
         style_note=data.style_note,
         target_length=data.target_length,
@@ -47,9 +48,10 @@ async def regenerate_chapter(chapter_id: int, data: RegenerateRequest, db: Async
     chapter = await ChapterService(db).get_chapter(chapter_id)
     _require_chapter(chapter)
 
-    service = ContinuationService(db)
-    generation = await service.generate_continuation(
+    engine = WritingEngine(db)
+    generation = await engine.generate_continuation(
         chapter_id=chapter_id,
+        novel_id=chapter.novel_id,
         user_intent=data.user_intent,
         style_note=data.style_note,
     )
@@ -65,8 +67,8 @@ async def polish_chapter(chapter_id: int, data: PolishRequest, db: AsyncSession 
     chapter = await ChapterService(db).get_chapter(chapter_id)
     _require_chapter(chapter)
 
-    service = ContinuationService(db)
-    generation = await service.generate_polish(
+    engine = WritingEngine(db)
+    generation = await engine.generate_polish(
         chapter_id=chapter_id,
         selected_text=data.selected_text,
         context_before=data.context_before,
@@ -82,8 +84,8 @@ async def polish_chapter(chapter_id: int, data: PolishRequest, db: AsyncSession 
 
 @router.get("/chapters/{chapter_id}/generations", response_model=GenerationListResponse)
 async def list_generations(chapter_id: int, db: AsyncSession = Depends(get_db)):
-    service = ContinuationService(db)
-    generations = await service.get_generations(chapter_id)
+    engine = WritingEngine(db)
+    generations = await engine.get_generations(chapter_id)
     return GenerationListResponse(
         generations=[GenerationResponse.model_validate(g) for g in generations]
     )
@@ -91,8 +93,27 @@ async def list_generations(chapter_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.put("/generations/{generation_id}/accept", response_model=GenerationResponse)
 async def accept_generation(generation_id: int, data: AcceptRequest, db: AsyncSession = Depends(get_db)):
-    service = ContinuationService(db)
-    gen = await service.accept_generation(generation_id, data.accepted)
+    engine = WritingEngine(db)
+    gen = await engine.accept_generation(generation_id, data.accepted)
     if not gen:
         raise HTTPException(status_code=404, detail="生成记录不存在")
     return GenerationResponse.model_validate(gen)
+
+
+# V2: 记忆更新端点
+
+@router.post("/chapters/{chapter_id}/update-memory")
+async def update_chapter_memory(chapter_id: int, db: AsyncSession = Depends(get_db)):
+    """章节保存后手动触发记忆更新"""
+    chapter = await ChapterService(db).get_chapter(chapter_id)
+    _require_chapter(chapter)
+
+    engine = WritingEngine(db)
+    await engine.update_memory_after_save(
+        novel_id=chapter.novel_id,
+        chapter_id=chapter_id,
+        chapter_title=chapter.title,
+        content=chapter.content,
+    )
+
+    return {"status": "ok", "message": "记忆已更新"}

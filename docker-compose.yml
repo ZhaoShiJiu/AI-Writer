@@ -5,6 +5,7 @@ networks:
 volumes:
   postgresql-data:
   redis-data:
+  chroma-data:
 
 services:
   postgres:
@@ -76,6 +77,31 @@ services:
       retries: 5
       start_period: 10s
 
+  chroma:
+    build:
+      context: ./chroma
+      dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+    container_name: novel-write-chroma
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    networks:
+      - write-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v2/heartbeat || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   backend:
     build:
       context: ./backend
@@ -98,8 +124,11 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       LLM_GATEWAY_URL: http://gateway:8001
       # 关键修复: 内部服务间通信不走代理
-      NO_PROXY: gateway,postgres,redis,localhost,127.0.0.1
-      no_proxy: gateway,postgres,redis,localhost,127.0.0.1
+      NO_PROXY: gateway,postgres,redis,chroma,localhost,127.0.0.1
+      no_proxy: gateway,postgres,redis,chroma,localhost,127.0.0.1
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      EMBEDDING_MODEL: dashscope/text-embedding-v4
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,12 +152,13 @@ services:
     ports:
       - "3000:3000"
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000"]
-      interval: 5s
+      test: ["CMD-SHELL", "node -e 'require(\"http\").get(\"http://localhost:3000\",function(r){process.exit(0)}).on(\"error\",function(){process.exit(1)})'"]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
       start_period: 15s
     environment:
+      HOSTNAME: "0.0.0.0"
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       NO_PROXY: backend,gateway,postgres,redis,localhost,127.0.0.1
       no_proxy: backend,gateway,postgres,redis,localhost,127.0.0.1

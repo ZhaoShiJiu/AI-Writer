@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import novels, chapters, ai
+from app.api import novels, chapters, ai, memory
 
 
 @asynccontextmanager
@@ -11,7 +11,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Novel Write API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Novel Write API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +24,7 @@ app.add_middleware(
 app.include_router(novels.router, prefix="/api")
 app.include_router(chapters.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
+app.include_router(memory.router)
 
 
 @app.get("/api/health")

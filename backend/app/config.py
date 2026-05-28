@@ -9,6 +9,14 @@ class Settings(BaseSettings):
     context_max_chars: int = 4000
     continuation_target_chars: int = 400
 
+    # V2: ChromaDB vector store
+    chroma_host: str = "localhost"
+    chroma_port: int = 8002
+
+    # V2: Embedding model
+    embedding_model: str = "dashscope/text-embedding-v4"
+    embedding_dimension: int = 1024
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
