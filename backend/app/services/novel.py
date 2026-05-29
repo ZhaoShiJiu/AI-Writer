@@ -16,6 +16,12 @@ class NovelService:
     async def create_novel(self, title: str, user_id: int):
         return await self.repo.create(title, user_id)
 
+    async def update_novel(self, novel_id: int, **kwargs):
+        novel = await self.repo.get_by_id(novel_id)
+        if novel:
+            return await self.repo.update(novel, **kwargs)
+        return None
+
     async def delete_novel(self, novel_id: int):
         novel = await self.repo.get_by_id(novel_id)
         if novel:

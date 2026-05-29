@@ -7,6 +7,10 @@ class NovelCreate(BaseModel):
     title: str
 
 
+class NovelUpdate(BaseModel):
+    title: str
+
+
 class NovelResponse(BaseModel):
     id: int
     title: str

@@ -25,6 +25,14 @@ class NovelRepository:
         await self.db.refresh(novel)
         return novel
 
+    async def update(self, novel: Novel, **kwargs) -> Novel:
+        for key, value in kwargs.items():
+            if value is not None:
+                setattr(novel, key, value)
+        await self.db.commit()
+        await self.db.refresh(novel)
+        return novel
+
     async def delete(self, novel: Novel) -> None:
         await self.db.delete(novel)
         await self.db.commit()

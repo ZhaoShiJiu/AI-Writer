@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas.novel import NovelCreate, NovelListResponse, NovelResponse
+from app.schemas.novel import NovelCreate, NovelListResponse, NovelResponse, NovelUpdate
 from app.services.novel import NovelService
 
 router = APIRouter(tags=["novels"])
@@ -39,3 +39,12 @@ async def delete_novel(novel_id: int, db: AsyncSession = Depends(get_db)):
     novel = await service.delete_novel(novel_id)
     if not novel:
         raise HTTPException(status_code=404, detail="小说不存在")
+
+
+@router.put("/novels/{novel_id}", response_model=NovelResponse)
+async def update_novel(novel_id: int, data: NovelUpdate, db: AsyncSession = Depends(get_db)):
+    service = NovelService(db)
+    novel = await service.update_novel(novel_id, title=data.title)
+    if not novel:
+        raise HTTPException(status_code=404, detail="小说不存在")
+    return NovelResponse.model_validate(novel)
