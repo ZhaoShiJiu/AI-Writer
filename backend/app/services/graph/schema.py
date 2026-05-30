@@ -38,9 +38,7 @@ async def ensure_schema() -> None:
         return
 
     client = get_graph_client()
-    if not client.is_connected():
-        return
-
+    # run_write will connect lazily on first call
     try:
         for stmt in NEO4J_CONSTRAINTS + NEO4J_INDEXES:
             await client.run_write(stmt)

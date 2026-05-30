@@ -41,7 +41,7 @@ class GraphClient:
 
     async def run_read(self, query: str, params: dict | None = None) -> list[dict]:
         """Run a read query and return list of record dicts."""
-        if not settings.feature_neo4j_enabled or not self._connected:
+        if not settings.feature_neo4j_enabled:
             return []
         await self._ensure_driver()
         if not self._driver:
@@ -58,7 +58,7 @@ class GraphClient:
 
     async def run_write(self, query: str, params: dict | None = None) -> list[dict]:
         """Run a write query and return list of record dicts."""
-        if not settings.feature_neo4j_enabled or not self._connected:
+        if not settings.feature_neo4j_enabled:
             return []
         await self._ensure_driver()
         if not self._driver:

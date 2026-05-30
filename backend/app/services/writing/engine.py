@@ -404,6 +404,37 @@ class WritingEngine:
         except Exception:
             pass
 
+        # V4: 同步 Neo4j 故事图谱
+        try:
+            from app.services.graph.story_graph import story_graph_service
+            # Sync characters
+            characters = await self.char_service.list_characters(novel_id)
+            await story_graph_service.sync_characters(novel_id, characters)
+            await story_graph_service.sync_character_relations(novel_id, characters)
+            # Sync world (factions + locations)
+            world_state = await self.world_service.get_world_state_dict(novel_id)
+            if world_state:
+                await story_graph_service.sync_factions_and_locations(novel_id, world_state)
+            # Sync events from summaries
+            summaries = await self.summary_generator.get_recent_summaries(novel_id, limit=10)
+            await story_graph_service.sync_events(novel_id, summaries)
+        except Exception:
+            pass
+
+        # V4: 检测本章伏笔
+        try:
+            from app.services.foreshadowing import ForeshadowingService
+            foreshadowing_service = ForeshadowingService(self.db)
+            detected = await foreshadowing_service.detect_from_chapter(
+                novel_id=novel_id,
+                chapter_id=chapter_id,
+                content=content,
+            )
+            if detected:
+                logger.info("Detected %d foreshadowings in chapter %d", len(detected), chapter_id)
+        except Exception:
+            pass
+
     async def generate_v4(
         self,
         chapter_id: int,

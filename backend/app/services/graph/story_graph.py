@@ -15,7 +15,7 @@ class StoryGraphService:
 
     def _enabled(self) -> bool:
         from app.config import settings
-        return settings.feature_neo4j_enabled and self.client.is_connected()
+        return settings.feature_neo4j_enabled
 
     # ---- Sync from PostgreSQL ----
 
@@ -24,10 +24,16 @@ class StoryGraphService:
         if not self._enabled():
             return
         for char in characters:
-            name = char.get("character_name", "")
-            realm = char.get("memory_json", {}).get("realm", "")
-            personality = char.get("memory_json", {}).get("personality", [])
-            notes = char.get("memory_json", {}).get("notes", "")
+            # Handle both dict and ORM object
+            if hasattr(char, "character_name"):
+                name = char.character_name
+                mj = char.memory_json or {}
+            else:
+                name = char.get("character_name", "")
+                mj = char.get("memory_json", {})
+            realm = mj.get("realm", "")
+            personality = mj.get("personality", [])
+            notes = mj.get("notes", "")
             await self.client.run_write(
                 """
                 MERGE (c:Character {novel_id: $novel_id, name: $name})
@@ -44,8 +50,13 @@ class StoryGraphService:
         if not self._enabled():
             return
         for char in characters:
-            name = char.get("character_name", "")
-            relationships = char.get("memory_json", {}).get("relationships", [])
+            if hasattr(char, "character_name"):
+                name = char.character_name
+                mj = char.memory_json or {}
+            else:
+                name = char.get("character_name", "")
+                mj = char.get("memory_json", {})
+            relationships = mj.get("relationships", [])
             for rel in relationships:
                 target = rel.get("target", "")
                 relation = rel.get("relation", "")
