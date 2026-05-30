@@ -117,3 +117,28 @@ async def update_chapter_memory(chapter_id: int, db: AsyncSession = Depends(get_
     )
 
     return {"status": "ok", "message": "记忆已更新"}
+
+
+# V3: 协同创作端点（整合风格分析 + 叙事状态 + 情感曲线）
+
+@router.post("/chapters/{chapter_id}/continue-v3", response_model=ContinueResponse)
+async def continue_chapter_v3(
+    chapter_id: int, data: ContinueRequest, db: AsyncSession = Depends(get_db)
+):
+    """V3 AI续写：整合记忆、风格画像、叙事状态、情感目标"""
+    chapter = await ChapterService(db).get_chapter(chapter_id)
+    _require_chapter(chapter)
+
+    engine = WritingEngine(db)
+    generation = await engine.generate_continuation_v3(
+        chapter_id=chapter_id,
+        novel_id=chapter.novel_id,
+        user_intent=data.user_intent,
+        style_note=data.style_note,
+        target_length=data.target_length,
+    )
+
+    return ContinueResponse(
+        generation_id=generation.id,
+        ai_output=generation.ai_output,
+    )

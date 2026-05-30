@@ -12,10 +12,13 @@ from app.services.memory.character import CharacterMemoryService
 from app.services.memory.world import WorldMemoryService
 from app.services.rag.retriever import retriever
 from app.services.summary import SummaryGenerator
+from app.services.style import StyleService
+from app.services.narrative import NarrativeService
+from app.services.emotion import EmotionService
 
 
 class WritingEngine:
-    """V2 写作引擎 — 集成记忆系统 + RAG 检索的续写服务"""
+    """V3 写作引擎 — 集成记忆系统 + 风格分析 + 叙事理解 + RAG 检索的续写服务"""
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -23,6 +26,9 @@ class WritingEngine:
         self.char_service = CharacterMemoryService(db)
         self.world_service = WorldMemoryService(db)
         self.summary_generator = SummaryGenerator(db)
+        self.style_service = StyleService(db)
+        self.narrative_service = NarrativeService(db)
+        self.emotion_service = EmotionService(db)
         self.prompt_builder = PromptBuilder()
         self.llm_client = LLMClient()
 
@@ -58,6 +64,78 @@ class WritingEngine:
             style_note=style_note,
             target_length=target_length,
             memory_context=memory_context,
+        )
+
+        ai_output = await self.llm_client.complete(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+
+        generation = AIGeneration(
+            chapter_id=chapter_id,
+            user_intent=user_intent,
+            prompt_text=user_prompt,
+            ai_output=ai_output,
+        )
+        self.db.add(generation)
+        await self.db.commit()
+        await self.db.refresh(generation)
+
+        return generation
+
+    async def generate_continuation_v3(
+        self,
+        chapter_id: int,
+        novel_id: int,
+        user_intent: str = "",
+        style_note: str = "",
+        target_length: int | None = None,
+        emotion_target: str | None = None,
+    ):
+        """V3 续写：整合记忆 + 风格画像 + 叙事状态 + 情感目标"""
+        chapter = await self.chapter_repo.get_by_id(chapter_id)
+        if not chapter:
+            return None
+
+        if target_length is None:
+            target_length = settings.continuation_target_chars
+
+        # V2: 收集记忆上下文
+        memory_context = await self._gather_memory_context(
+            novel_id=novel_id,
+            chapter_content=chapter.content,
+            chapter_title=chapter.title,
+            chapter_id=chapter_id,
+            user_intent=user_intent,
+        )
+
+        # V3: 收集风格上下文
+        style_context = await self._gather_style_context(novel_id)
+
+        # V3: 收集叙事上下文
+        narrative_context = await self._gather_narrative_context(
+            novel_id=novel_id,
+            chapter_id=chapter_id,
+            content=chapter.content,
+        )
+
+        # V3: 收集情感目标
+        if not emotion_target:
+            emotion_target = await self.emotion_service.get_target_emotion_context(
+                chapter_id
+            )
+
+        context = self._extract_context(chapter.content)
+
+        system_prompt, user_prompt = self.prompt_builder.build_v3(
+            context=context,
+            user_intent=user_intent,
+            style_note=style_note,
+            target_length=target_length,
+            memory_context=memory_context,
+            style_context=style_context,
+            narrative_context=narrative_context,
+            emotion_target=emotion_target,
         )
 
         ai_output = await self.llm_client.complete(
@@ -174,6 +252,46 @@ class WritingEngine:
             await self.db.refresh(gen)
         return gen
 
+    async def _gather_style_context(self, novel_id: int) -> dict | None:
+        """收集风格上下文：懒加载风格画像"""
+        try:
+            profile = await self.style_service.get_style_profile(novel_id)
+            if not profile:
+                # 首次：触发风格分析
+                profile = await self.style_service.analyze_and_save(
+                    novel_id, self.llm_client
+                )
+            return profile
+        except Exception:
+            return None
+
+    async def _gather_narrative_context(
+        self, novel_id: int, chapter_id: int, content: str
+    ) -> dict | None:
+        """收集叙事上下文：懒加载叙事状态"""
+        try:
+            state = await self.narrative_service.get_chapter_state(chapter_id)
+            if not state:
+                # 首次：触发叙事分析
+                result = await self.narrative_service.analyze_chapter(
+                    novel_id=novel_id,
+                    chapter_id=chapter_id,
+                    content=content,
+                    llm_client=self.llm_client,
+                )
+                state = {
+                    "scene_type": result.get("scene_type"),
+                    "tension_score": result.get("tension_score", 0.5),
+                    "emotion": result.get("emotion"),
+                    "pace": result.get("pace", "medium"),
+                    "goal": result.get("goal"),
+                    "emotional_curve": result.get("emotional_curve", []),
+                    "narrative_notes": result.get("narrative_notes", ""),
+                }
+            return state
+        except Exception:
+            return None
+
     async def _gather_memory_context(
         self,
         novel_id: int,
@@ -274,6 +392,93 @@ class WritingEngine:
             )
         except Exception:
             pass
+
+        # V3: 分析叙事状态
+        try:
+            await self.narrative_service.analyze_chapter(
+                novel_id=novel_id,
+                chapter_id=chapter_id,
+                content=content,
+                llm_client=self.llm_client,
+            )
+        except Exception:
+            pass
+
+    async def generate_v4(
+        self,
+        chapter_id: int,
+        novel_id: int,
+        user_intent: str = "",
+        style_note: str = "",
+        target_length: int | None = None,
+        emotion_target: str | None = None,
+        pace_target: str | None = None,
+        planner_input: dict | None = None,
+    ) -> AIGeneration | None:
+        """V4续写：LangGraph多智能体工作流"""
+        from app.services.workflow.graph import get_v4_workflow
+        from app.services.workflow.state import WorkflowState
+
+        chapter = await self.chapter_repo.get_by_id(chapter_id)
+        if not chapter:
+            return None
+
+        initial_state: WorkflowState = {
+            "novel_id": novel_id,
+            "chapter_id": chapter_id,
+            "chapter_content": chapter.content or "",
+            "user_intent": user_intent,
+            "style_note": style_note,
+            "target_length": target_length or settings.continuation_target_chars,
+            "emotion_target": emotion_target,
+            "pace_target": pace_target,
+            "planner_input": planner_input or {},
+            "model": "deepseek/deepseek-v4-pro",
+            "_db_session": self.db,
+            "_retry_count": 0,
+        }
+
+        try:
+            workflow = get_v4_workflow()
+            final_state = await workflow.ainvoke(initial_state)
+        except Exception:
+            # Fallback to V3 on workflow failure
+            return await self.generate_continuation_v3(
+                chapter_id, novel_id, user_intent, style_note, target_length, emotion_target
+            )
+
+        generated_text = final_state.get("rewritten_text") or final_state.get("generated_text", "")
+        if not generated_text:
+            return None
+
+        generation = AIGeneration(
+            chapter_id=chapter_id,
+            user_intent=user_intent,
+            prompt_text="V4 Multi-Agent Workflow",
+            ai_output=generated_text,
+        )
+        self.db.add(generation)
+        await self.db.commit()
+        await self.db.refresh(generation)
+
+        # Save generation context for debugging
+        from app.models.generation_context import GenerationContext
+        try:
+            ctx = GenerationContext(
+                generation_id=generation.id,
+                context_json={
+                    "workflow_steps": final_state.get("current_step", ""),
+                    "intent_analysis": final_state.get("intent_analysis"),
+                    "consistency_pre": final_state.get("consistency_pre"),
+                    "consistency_post": final_state.get("consistency_post"),
+                },
+            )
+            self.db.add(ctx)
+            await self.db.commit()
+        except Exception:
+            pass
+
+        return generation
 
     def _extract_context(self, content: str) -> str:
         content = re.sub(r"<[^>]+>", "", content)

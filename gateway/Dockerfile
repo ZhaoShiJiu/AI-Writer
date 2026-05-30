@@ -1,11 +1,8 @@
 FROM python:3.14-slim
 
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-
 WORKDIR /app
 
-RUN HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY pip install --no-cache-dir fastapi uvicorn litellm tenacity dashscope
+RUN pip install --no-cache-dir fastapi uvicorn litellm tenacity dashscope
 
 COPY LLM_server.py .
 

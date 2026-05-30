@@ -17,6 +17,19 @@ class Settings(BaseSettings):
     embedding_model: str = "dashscope/text-embedding-v4"
     embedding_dimension: int = 1024
 
+    # V4: Neo4j graph database
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "novel_write_2024"
+    neo4j_database: str = "neo4j"
+
+    # V4: Redis cache TTL
+    redis_cache_ttl: int = 3600
+
+    # V4: Feature flags
+    feature_neo4j_enabled: bool = True
+    feature_v4_enabled: bool = True
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

@@ -6,6 +6,8 @@ volumes:
   postgresql-data:
   redis-data:
   chroma-data:
+  neo4j-data:
+  neo4j-logs:
 
 services:
   postgres:
@@ -57,9 +59,6 @@ services:
     build:
       context: ./gateway
       dockerfile: Dockerfile
-      args:
-        HTTP_PROXY: ${HTTP_PROXY}
-        HTTPS_PROXY: ${HTTPS_PROXY}
     container_name: novel-write-gateway
     restart: unless-stopped
     ports:
@@ -67,7 +66,6 @@ services:
     environment:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      # 网关只访问外部 LLM API，需要代理；不需要 NO_PROXY
     networks:
       - write-network
     healthcheck:
@@ -81,9 +79,6 @@ services:
     build:
       context: ./chroma
       dockerfile: Dockerfile
-      args:
-        HTTP_PROXY: ${HTTP_PROXY}
-        HTTPS_PROXY: ${HTTPS_PROXY}
     container_name: novel-write-chroma
     restart: unless-stopped
     ports:
@@ -102,13 +97,31 @@ services:
       retries: 3
       start_period: 5s
 
+  neo4j:
+    image: neo4j:5.26
+    container_name: novel-write-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    networks:
+      - write-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      args:
-        HTTP_PROXY: ${HTTP_PROXY}
-        HTTPS_PROXY: ${HTTPS_PROXY}
     container_name: novel-write-backend
     restart: unless-stopped
     ports:
@@ -123,18 +136,23 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       LLM_GATEWAY_URL: http://gateway:8001
-      # 关键修复: 内部服务间通信不走代理
       NO_PROXY: gateway,postgres,redis,chroma,localhost,127.0.0.1
       no_proxy: gateway,postgres,redis,chroma,localhost,127.0.0.1
       CHROMA_HOST: chroma
       CHROMA_PORT: "8000"
       EMBEDDING_MODEL: dashscope/text-embedding-v4
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      NEO4J_DATABASE: neo4j
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       gateway:
+        condition: service_healthy
+      neo4j:
         condition: service_healthy
     networks:
       - write-network
@@ -144,8 +162,6 @@ services:
       context: ./frontend/my-app
       dockerfile: Dockerfile
       args:
-        HTTP_PROXY: ${HTTP_PROXY}
-        HTTPS_PROXY: ${HTTPS_PROXY}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     container_name: novel-write-frontend
     restart: unless-stopped
