@@ -1,9 +1,7 @@
 FROM node:22-alpine AS deps
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY npm ci
+RUN npm ci
 
 FROM node:22-alpine AS builder
 ARG NEXT_PUBLIC_API_URL

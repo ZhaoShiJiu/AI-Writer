@@ -12,15 +12,49 @@ export default function NovelSidebar() {
     loadNovels,
     createNovel,
     selectNovel,
+    updateNovelTitle,
     deleteNovel,
     createChapter,
     selectChapter,
+    updateChapterTitle,
     deleteChapter,
     loading,
   } = useNovelStore();
 
   const [newTitle, setNewTitle] = useState("");
   const [showCreateNovel, setShowCreateNovel] = useState(false);
+  const [editingNovelId, setEditingNovelId] = useState<number | null>(null);
+  const [editingChapterId, setEditingChapterId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+
+  const startRenameNovel = (novel: { id: number; title: string }) => {
+    setEditingNovelId(novel.id);
+    setEditingChapterId(null);
+    setEditTitle(novel.title);
+  };
+
+  const startRenameChapter = (ch: { id: number; title: string }) => {
+    setEditingChapterId(ch.id);
+    setEditingNovelId(null);
+    setEditTitle(ch.title);
+  };
+
+  const confirmRename = () => {
+    const trimmed = editTitle.trim();
+    if (!trimmed) return;
+    if (editingNovelId !== null) {
+      updateNovelTitle(editingNovelId, trimmed);
+      setEditingNovelId(null);
+    } else if (editingChapterId !== null) {
+      updateChapterTitle(editingChapterId, trimmed);
+      setEditingChapterId(null);
+    }
+  };
+
+  const cancelRename = () => {
+    setEditingNovelId(null);
+    setEditingChapterId(null);
+  };
 
   const handleCreateNovel = async () => {
     if (!newTitle.trim()) return;
@@ -58,7 +92,29 @@ export default function NovelSidebar() {
                   : "hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
               }`}
             >
-              <span className="truncate">{novel.title}</span>
+              {editingNovelId === novel.id ? (
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") confirmRename();
+                    if (e.key === "Escape") cancelRename();
+                  }}
+                  onBlur={confirmRename}
+                  className="flex-1 px-1 py-0.5 text-sm border rounded border-blue-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span
+                  className="truncate cursor-default"
+                  onDoubleClick={() => startRenameNovel(novel)}
+                  title="双击重命名"
+                >
+                  {novel.title}
+                </span>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -83,7 +139,29 @@ export default function NovelSidebar() {
                         : "hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
                     }`}
                   >
-                    <span className="truncate">{ch.title}</span>
+                    {editingChapterId === ch.id ? (
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") confirmRename();
+                          if (e.key === "Escape") cancelRename();
+                        }}
+                        onBlur={confirmRename}
+                        className="flex-1 px-1 py-0.5 text-xs border rounded border-blue-400 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span
+                        className="truncate cursor-default"
+                        onDoubleClick={() => startRenameChapter(ch)}
+                        title="双击重命名"
+                      >
+                        {ch.title}
+                      </span>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
